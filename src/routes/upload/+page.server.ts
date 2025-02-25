@@ -1,10 +1,8 @@
-import { json, error, redirect } from '@sveltejs/kit';
-import { writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { getUserFromSessionID } from '$lib/db';
+import { error, redirect } from '@sveltejs/kit';
+import { fileTypeFromBuffer } from 'file-type';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'path';
-
-import {
-	getUserFromSessionID
-} from '$lib/db';
 
 /** @type {import('./$types').PageServerLoad} */
 export async function load({ cookies }) {
@@ -16,13 +14,14 @@ export async function load({ cookies }) {
 			return { user, sessionid };
 		else {
 			cookies.delete('sessionid', { path: '/' });
-			error(500, user.Error.message)
+			error(500, user.Error.message);
 		}
 	} else {
 		cookies.delete('sessionid', { path: '/' });
 		redirect(307, '/');
 	}
 }
+
 /** @type {import('./$types').Actions} */
 export const actions = {
 	upload: async ({ request }) => {
@@ -33,24 +32,33 @@ export const actions = {
 			!(formData.fileToUpload as File).name ||
 			(formData.fileToUpload as File).name === 'undefined'
 		) {
-			return { sucess: false, message: 'You must provide a file to upload' };
+			console.log('Upload failed: No file provided');
+			return { success: false, message: 'You must provide a file to upload' };
 		}
 
 		const p = data.get('path');
 		const { fileToUpload } = formData as { fileToUpload: File };
-		var uploadPath;
-		if (p !== undefined && p !== '') {
-			uploadPath = `uploads/${p}${path.extname(fileToUpload.name)}`;
-		} else {
-			uploadPath = `uploads/${fileToUpload.name}`;
+		const buffer = Buffer.from(await fileToUpload.arrayBuffer());
+		const fileType = await fileTypeFromBuffer(buffer);
+
+		if (!fileType) {
+			console.log('Upload failed: Unsupported file type');
+			return { success: false, message: 'Unsupported file type' };
 		}
 
-		if (!existsSync(path.dirname(`static/${uploadPath}`))) {
-			mkdirSync(path.dirname(`static/${uploadPath}`), { recursive: true });
+		const safePath = path.normalize(`uploads/${p}${path.extname(fileToUpload.name)}`);
+		if (!safePath.startsWith('uploads/')) {
+			console.log('Upload failed: Unsafe path');
+			return { success: false, message: 'Unsafe path' };
 		}
 
-		writeFileSync(`static/${uploadPath}`, Buffer.from(await fileToUpload.arrayBuffer()));
+		if (!existsSync(path.dirname(`static/${safePath}`))) {
+			mkdirSync(path.dirname(`static/${safePath}`), { recursive: true });
+		}
 
-		return { success: true, path: uploadPath };
+		writeFileSync(`static/${safePath}`, buffer);
+
+		console.log(`Upload successful: ${safePath}`);
+		return { success: true, path: safePath };
 	}
 };
