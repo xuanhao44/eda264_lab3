@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3';
 import md5 from 'md5';
+import xss from 'xss';
 
 const db = new Database('db.db');
 db.exec(
@@ -97,14 +98,6 @@ function isSQLInjection(input: string): boolean {
 	return sqlKeywords.some(keyword => input.toUpperCase().includes(keyword));
 }
 
-function escapeHtml(input: string): string {
-	return input.replace(/&/g, "&amp;")
-		.replace(/</g, "&lt;")
-		.replace(/>/g, "&gt;")
-		.replace(/"/g, "&quot;")
-		.replace(/'/g, "&#039;");
-}
-
 export function addComment(sid: string, comment: string): { done: boolean, Error?: Error } {
 
 	// prevent SQL injection
@@ -113,7 +106,7 @@ export function addComment(sid: string, comment: string): { done: boolean, Error
 	}
 
 	// prevent XSS
-	const safeComment = escapeHtml(comment);
+	const safeComment = xss(comment);
 
 	const uid = getUIDFromSessionID(sid);
 	if (uid === 0) return { done: false, Error: new Error("Invalid session") };
@@ -171,7 +164,7 @@ export function getComments(): { Timestamp: string; Username: string; Html: stri
 		// prevent XSS
 		return results.map(comment => ({
 			...comment,
-			Html: escapeHtml(comment.Html)
+			Html: xss(comment.Html)
 		}));
 
 	} catch {
