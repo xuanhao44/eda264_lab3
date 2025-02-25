@@ -37,6 +37,8 @@ export const actions = {
 		}
 
 		const p = data.get('path');
+		console.log("path input by user: " + p);
+
 		const { fileToUpload } = formData as { fileToUpload: File };
 		const buffer = Buffer.from(await fileToUpload.arrayBuffer());
 		const fileType = await fileTypeFromBuffer(buffer);
@@ -47,6 +49,8 @@ export const actions = {
 		}
 
 		const safePath = path.normalize(`uploads/${p}${path.extname(fileToUpload.name)}`);
+		console.log("safePath (already handled by normalize) (also ext name of course): " + safePath);
+
 		if (!safePath.startsWith('uploads/')) {
 			console.log('Upload failed: Unsafe path');
 			return { success: false, message: 'Unsafe path' };
