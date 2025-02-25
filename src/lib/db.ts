@@ -97,12 +97,23 @@ function isSQLInjection(input: string): boolean {
 	return sqlKeywords.some(keyword => input.toUpperCase().includes(keyword));
 }
 
+function escapeHtml(input: string): string {
+	return input.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/"/g, "&quot;")
+		.replace(/'/g, "&#039;");
+}
+
 export function addComment(sid: string, comment: string): { done: boolean, Error?: Error } {
 
 	// prevent SQL injection
 	if (isSQLInjection(comment)) {
 		return { done: false, Error: new Error("Invalid input") };
 	}
+
+	// prevent XSS
+	const safeComment = escapeHtml(comment);
 
 	const uid = getUIDFromSessionID(sid);
 	if (uid === 0) return { done: false, Error: new Error("Invalid session") };
@@ -128,7 +139,7 @@ export function addComment(sid: string, comment: string): { done: boolean, Error
 	// use parameterized query to prevent SQL injection
 	try {
 		const stmt = db.prepare("INSERT INTO Table_Comments (Timestamp, User, Html) VALUES (?, ?, ?)");
-		stmt.run(day, uid, comment);
+		stmt.run(day, uid, safeComment);
 		return { done: true };
 	} catch (e) {
 		return { done: false, Error: e as Error };
@@ -155,7 +166,14 @@ export function getComments(): { Timestamp: string; Username: string; Html: stri
             FROM Table_Comments 
             INNER JOIN Table_Users ON Table_Comments.User = Table_Users.UID
         `);
-		return command.all() as { Timestamp: string; Username: string; Html: string }[];
+		const results = command.all() as { Timestamp: string; Username: string; Html: string }[];
+
+		// prevent XSS
+		return results.map(comment => ({
+			...comment,
+			Html: escapeHtml(comment.Html)
+		}));
+
 	} catch {
 		return [];
 	}
